@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Карта проектов</title>
+<style>
+:root{
+  --bg:#f6f5f2; --surface:#ffffff; --border:#e2ded6; --text:#25241f; --muted:#7a766c;
+  --accent:#2f5d50; --accent-soft:#e4ede9; --warn:#a8632b; --danger:#b3432f;
+  --done:#8b8a82; --paused:#c99a4a;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#1c1b18; --surface:#242320; --border:#3a3833; --text:#eae7e0; --muted:#9c988d;
+    --accent:#7fb8a4; --accent-soft:#2a3733; --warn:#d99a5c; --danger:#e07a63;
+    --done:#6f6c62; --paused:#d9b169;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#1c1b18; --surface:#242320; --border:#3a3833; --text:#eae7e0; --muted:#9c988d;
+  --accent:#7fb8a4; --accent-soft:#2a3733; --warn:#d99a5c; --danger:#e07a63;
+  --done:#6f6c62; --paused:#d9b169;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px); height:100%;}
+*{box-sizing:border-box;}
+body{
+  margin:0; height:100%; background:var(--bg); color:var(--text);
+  font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  font-size:15px; line-height:1.5;
+}
+header{
+  padding:20px 24px 8px; max-width:1000px; margin:0 auto;
+}
+header h1{font-size:20px; font-weight:600; margin:0 0 2px;}
+header p{color:var(--muted); margin:0; font-size:13px;}
+.toolbar{
+  max-width:1000px; margin:0 auto; padding:12px 24px; display:flex; gap:8px; flex-wrap:wrap;
+}
+main{max-width:1000px; margin:0 auto; padding:0 24px 60px;}
+button{
+  font:inherit; background:var(--surface); color:var(--text); border:1px solid var(--border);
+  border-radius:7px; padding:7px 12px; cursor:pointer;
+}
+button:hover{border-color:var(--accent);}
+button.primary{background:var(--accent); color:#fff; border-color:var(--accent);}
+button.ghost{background:transparent; border-color:transparent; padding:4px 6px; color:var(--muted);}
+button.ghost:hover{color:var(--text);}
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible{outline:2px solid var(--accent); outline-offset:1px;}
+.small{font-size:12px; padding:4px 8px;}
+
+.project-card{
+  background:var(--surface); border:1px solid var(--border); border-radius:10px;
+  margin-bottom:12px; overflow:hidden;
+}
+.project-head{
+  padding:14px 16px; cursor:pointer; display:flex; justify-content:space-between; gap:12px; align-items:flex-start;
+}
+.project-head:hover{background:var(--accent-soft);}
+.project-title{font-weight:600; font-size:15px;}
+.project-desc{color:var(--muted); font-size:13px; margin-top:2px;}
+.project-meta{margin-top:8px; display:grid; gap:3px; font-size:13px;}
+.project-meta .row span.label{color:var(--muted);}
+.status-badge{
+  font-size:12px; padding:2px 9px; border-radius:20px; white-space:nowrap; height:fit-content;
+  border:1px solid var(--border);
+}
+.status-В_работе{color:var(--accent); border-color:var(--accent);}
+.status-Завершено{color:var(--done); border-color:var(--done);}
+.status-Пауза{color:var(--paused); border-color:var(--paused);}
+.status-Не_начато{color:var(--muted);}
+
+.tree-wrap{border-top:1px solid var(--border); padding:10px 16px 16px;}
+.node{margin-left:0;}
+.node-children{margin-left:20px; border-left:1px dashed var(--border); padding-left:14px;}
+.node-row{
+  display:flex; align-items:center; gap:6px; padding:5px 6px; border-radius:6px; cursor:pointer;
+}
+.node-row:hover{background:var(--accent-soft);}
+.node-row.selected{background:var(--accent-soft); outline:1px solid var(--accent);}
+.node-row .caret{width:16px; text-align:center; color:var(--muted); flex-shrink:0;}
+.node-row .dot{width:8px; height:8px; border-radius:50%; flex-shrink:0;}
+.dot-Не_начато{background:var(--border);}
+.dot-В_работе{background:var(--accent);}
+.dot-Завершено{background:var(--done);}
+.dot-Пауза{background:var(--paused);}
+.node-row .ntitle{flex:1;}
+.node-row.status-Завершено .ntitle{color:var(--muted); text-decoration:line-through;}
+.node-actions{display:none; gap:2px;}
+.node-row:hover .node-actions{display:flex;}
+.add-child-btn{margin:4px 0 4px 20px; font-size:12px;}
+
+.panel-overlay{
+  position:fixed; inset:0; background:rgba(0,0,0,.25); display:flex; justify-content:flex-end; z-index:50;
+}
+.panel{
+  width:min(380px,92vw); background:var(--surface); height:100%; padding:20px; overflow-y:auto;
+  border-left:1px solid var(--border);
+}
+.panel h2{font-size:16px; margin:0 0 14px;}
+.field{margin-bottom:12px;}
+.field label{display:block; font-size:12px; color:var(--muted); margin-bottom:4px;}
+.field input, .field textarea, .field select{
+  width:100%; padding:8px 10px; border:1px solid var(--border); border-radius:7px;
+  background:var(--bg); color:var(--text); font:inherit;
+}
+.field textarea{resize:vertical; min-height:60px;}
+.panel-actions{display:flex; justify-content:space-between; margin-top:18px;}
+.empty{color:var(--muted); text-align:center; padding:40px 0;}
+</style>
+</head>
+<body>
+<header>
+  <h1>Карта проектов</h1>
+  <p>Где сейчас каждый проект и куда он движется</p>
+</header>
+<div class="toolbar">
+  <button class="primary" id="btnNewProject">+ Новый проект</button>
+  <button class="small" id="btnExport">Экспорт JSON</button>
+  <button class="small" id="btnImport">Импорт JSON</button>
+  <input type="file" id="fileImport" accept="application/json" style="display:none">
+  <button class="small" id="btnClear">Очистить данные</button>
+</div>
+<main id="projectList"></main>
+
+<script>
+/* ---------- Storage ---------- */
+const Storage = (() => {
+  const KEY = 'project_map_data_v1';
+  function load(){
+    try{ const raw = localStorage.getItem(KEY); return raw ? JSON.parse(raw) : null; }
+    catch(e){ console.error('load failed', e); return null; }
+  }
+  function save(data){
+    try{ localStorage.setItem(KEY, JSON.stringify(data)); }
+    catch(e){ console.error('save failed', e); }
+  }
+  function clear(){ localStorage.removeItem(KEY); }
+  return { load, save, clear };
+})();
+
+/* ---------- Data model helpers ---------- */
+const STATUSES = ['Не начато','В работе','Завершено','Пауза'];
+function uid(){ return 'id_' + Math.random().toString(36).slice(2,10) + Date.now().toString(36); }
+function newNode(title){
+  return { id:uid(), title:title||'Новый элемент', description:'', status:'Не начато',
+           priority:'Средний', deadline:'', notes:'', links:'', children:[] };
+}
+function newProject(title){
+  return { id:uid(), title:title||'Новый проект', description:'', status:'Не начато',
+           currently:'', nextStep:'', priority:'Средний', deadline:'', notes:'', links:'', children:[] };
+}
+
+/* ---------- Project Manager (top-level data) ---------- */
+const ProjectManager = (() => {
+  let projects = [];
+  function all(){ return projects; }
+  function set(list){ projects = list; }
+  function add(p){ projects.push(p); }
+  function remove(id){ projects = projects.filter(p => p.id !== id); }
+  function find(id){ return projects.find(p => p.id === id); }
+  return { all, set, add, remove, find };
+})();
+
+/* ---------- Tree Manager (recursive node ops, works on a project's children) ---------- */
+const TreeManager = (() => {
+  function findNode(node, id){
+    if(node.id === id) return node;
+    for(const c of node.children||[]){
+      const r = findNode(c, id);
+      if(r) return r;
+    }
+    return null;
+  }
+  function findInProject(project, id){
+    if(project.id === id) return project;
+    for(const c of project.children){
+      const r = findNode(c, id);
+      if(r) return r;
+    }
+    return null;
+  }
+  function findParent(project, id){
+    function walk(node){
+      for(const c of node.children||[]){
+        if(c.id === id) return node;
+        const r = walk(c);
+        if(r) return r;
+      }
+      return null;
+    }
+    return walk(project);
+  }
+  function addChild(parentNode){
+    const n = newNode();
+    parentNode.children = parentNode.children || [];
+    parentNode.children.push(n);
+    return n;
+  }
+  function removeNode(project, id){
+    const parent = findParent(project, id);
+    if(parent){ parent.children = parent.children.filter(c => c.id !== id); }
+  }
+  function moveNode(project, id, dir){
+    const parent = findParent(project, id) || project;
+    const arr = parent.children;
+    const idx = arr.findIndex(c => c.id === id);
+    if(idx < 0) return;
+    const newIdx = idx + dir;
+    if(newIdx < 0 || newIdx >= arr.length) return;
+    [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
+  }
+  return { findInProject, findParent, addChild, removeNode, moveNode };
+})();
+
+/* ---------- App state ---------- */
+let expandedProjects = new Set();
+let collapsedNodes = new Set();
+let selectedNodeInfo = null; // {projectId, nodeId}
+
+function persist(){ Storage.save({ projects: ProjectManager.all() }); }
+
+function statusClass(s){ return 'status-' + s.replace(/\s/g,'_'); }
+
+/* ---------- UI Components / Dashboard ---------- */
+const el = (tag, cls, text) => {
+  const e = document.createElement(tag);
+  if(cls) e.className = cls;
+  if(text !== undefined) e.textContent = text;
+  return e;
+};
+
+function renderAll(){
+  const root = document.getElementById('projectList');
+  root.innerHTML = '';
+  const projects = ProjectManager.all();
+  if(projects.length === 0){
+    root.appendChild(el('div','empty','Пока нет проектов. Добавьте первый через кнопку выше.'));
+    return;
+  }
+  projects.forEach(p => root.appendChild(renderProjectCard(p)));
+}
+
+function renderProjectCard(project){
+  const card = el('div','project-card');
+  const head = el('div','project-head');
+  const left = el('div');
+  left.appendChild(el('div','project-title', project.title));
+  if(project.description) left.appendChild(el('div','project-desc', project.description));
+  const meta = el('div','project-meta');
+  if(project.currently) meta.appendChild(rowMeta('Сейчас', project.currently));
+  if(project.nextStep) meta.appendChild(rowMeta('Следующий шаг', project.nextStep));
+  left.appendChild(meta);
+  head.appendChild(left);
+  head.appendChild(el('div','status-badge ' + statusClass(project.status), project.status));
+  head.onclick = () => {
+    if(expandedProjects.has(project.id)) expandedProjects.delete(project.id);
+    else expandedProjects.add(project.id);
+    renderAll();
+  };
+  card.appendChild(head);
+
+  if(expandedProjects.has(project.id)){
+    const wrap = el('div','tree-wrap');
+    const editBtnRow = el('div');
+    const editProjectBtn = el('button','small', 'Редактировать проект');
+    editProjectBtn.onclick = (e) => { e.stopPropagation(); openEditor(project, project); };
+    const delProjectBtn = el('button','small', 'Удалить проект');
+    delProjectBtn.style.marginLeft = '6px';
+    delProjectBtn.onclick = (e) => {
+      e.stopPropagation();
+      if(confirm('Удалить проект "' + project.title + '" целиком?')){
+        ProjectManager.remove(project.id); persist(); renderAll();
+      }
+    };
+    editBtnRow.appendChild(editProjectBtn);
+    editBtnRow.appendChild(delProjectBtn);
+    wrap.appendChild(editBtnRow);
+
+    project.children.forEach(child => wrap.appendChild(renderNode(project, child)));
+
+    const addBtn = el('button','small add-child-btn', '+ добавить элемент');
+    addBtn.onclick = (e) => {
+      e.stopPropagation();
+      const n = TreeManager.addChild(project);
+      persist(); renderAll();
+      openEditor(project, n);
+    };
+    wrap.appendChild(addBtn);
+    card.appendChild(wrap);
+  }
+  return card;
+}
+
+function rowMeta(label, value){
+  const r = el('div','row');
+  const l = el('span','label', label + ': ');
+  r.appendChild(l);
+  r.appendChild(document.createTextNode(value));
+  return r;
+}
+
+function renderNode(project, node){
+  const container = el('div','node');
+  const row = el('div','node-row ' + statusClass(node.status));
+  const hasChildren = node.children && node.children.length > 0;
+  const collapsed = collapsedNodes.has(node.id);
+
+  const caret = el('span','caret', hasChildren ? (collapsed ? '▸' : '▾') : '·');
+  caret.onclick = (e) => {
+    e.stopPropagation();
+    if(!hasChildren) return;
+    if(collapsed) collapsedNodes.delete(node.id); else collapsedNodes.add(node.id);
+    renderAll();
+  };
+  row.appendChild(caret);
+  row.appendChild(el('span','dot dot-' + node.status.replace(/\s/g,'_')));
+  row.appendChild(el('span','ntitle', node.title));
+
+  const actions = el('span','node-actions');
+  const mkBtn = (label, fn) => { const b = el('button','ghost small', label); b.onclick = (e)=>{e.stopPropagation(); fn();}; return b; };
+  actions.appendChild(mkBtn('+', () => { const n = TreeManager.addChild(node); persist(); renderAll(); openEditor(project, n); }));
+  actions.appendChild(mkBtn('↑', () => { TreeManager.moveNode(project, node.id, -1); persist(); renderAll(); }));
+  actions.appendChild(mkBtn('↓', () => { TreeManager.moveNode(project, node.id, 1); persist(); renderAll(); }));
+  actions.appendChild(mkBtn('✕', () => {
+    if(confirm('Удалить "' + node.title + '" вместе с вложенными элементами?')){
+      TreeManager.removeNode(project, node.id); persist(); renderAll();
+    }
+  }));
+  row.appendChild(actions);
+
+  row.onclick = () => openEditor(project, node);
+  container.appendChild(row);
+
+  if(hasChildren && !collapsed){
+    const childWrap = el('div','node-children');
+    node.children.forEach(c => childWrap.appendChild(renderNode(project, c)));
+    container.appendChild(childWrap);
+  }
+  return container;
+}
+
+/* ---------- Task Editor (side panel) ---------- */
+function openEditor(project, item){
+  const isProject = item.id === project.id;
+  const overlay = el('div','panel-overlay');
+  const panel = el('div','panel');
+  panel.appendChild(el('h2', null, isProject ? 'Проект' : 'Элемент дерева'));
+
+  const f = (labelText, valueEl) => {
+    const wrap = el('div','field');
+    wrap.appendChild(el('label', null, labelText));
+    wrap.appendChild(valueEl);
+    return wrap;
+  };
+
+  const titleInput = document.createElement('input');
+  titleInput.value = item.title;
+  panel.appendChild(f('Название', titleInput));
+
+  const descInput = document.createElement('textarea');
+  descInput.value = item.description || '';
+  panel.appendChild(f('Описание', descInput));
+
+  const statusSelect = document.createElement('select');
+  STATUSES.forEach(s => { const o = document.createElement('option'); o.value = s; o.textContent = s; statusSelect.appendChild(o); });
+  statusSelect.value = item.status;
+  panel.appendChild(f('Статус', statusSelect));
+
+  const priorityInput = document.createElement('select');
+  ['Низкий','Средний','Высокий'].forEach(pv => { const o = document.createElement('option'); o.value = pv; o.textContent = pv; priorityInput.appendChild(o); });
+  priorityInput.value = item.priority || 'Средний';
+  panel.appendChild(f('Приоритет', priorityInput));
+
+  const deadlineInput = document.createElement('input');
+  deadlineInput.type = 'date';
+  deadlineInput.value = item.deadline || '';
+  panel.appendChild(f('Дедлайн (необязательно)', deadlineInput));
+
+  let currentlyInput, nextStepInput;
+  if(isProject){
+    currentlyInput = document.createElement('textarea');
+    currentlyInput.value = item.currently || '';
+    panel.appendChild(f('Где мы сейчас', currentlyInput));
+    nextStepInput = document.createElement('textarea');
+    nextStepInput.value = item.nextStep || '';
+    panel.appendChild(f('Следующий шаг', nextStepInput));
+  }
+
+  const notesInput = document.createElement('textarea');
+  notesInput.value = item.notes || '';
+  panel.appendChild(f('Заметки', notesInput));
+
+  const linksInput = document.createElement('input');
+  linksInput.value = item.links || '';
+  panel.appendChild(f('Ссылки', linksInput));
+
+  const actions = el('div','panel-actions');
+  const saveBtn = el('button','primary','Сохранить');
+  const closeBtn = el('button',null,'Закрыть');
+  saveBtn.onclick = () => {
+    item.title = titleInput.value.trim() || item.title;
+    item.description = descInput.value;
+    item.status = statusSelect.value;
+    item.priority = priorityInput.value;
+    item.deadline = deadlineInput.value;
+    item.notes = notesInput.value;
+    item.links = linksInput.value;
+    if(isProject){ item.currently = currentlyInput.value; item.nextStep = nextStepInput.value; }
+    persist();
+    document.body.removeChild(overlay);
+    renderAll();
+  };
+  closeBtn.onclick = () => document.body.removeChild(overlay);
+  actions.appendChild(saveBtn);
+  actions.appendChild(closeBtn);
+  panel.appendChild(actions);
+
+  overlay.appendChild(panel);
+  overlay.onclick = (e) => { if(e.target === overlay) document.body.removeChild(overlay); };
+  document.body.appendChild(overlay);
+  titleInput.focus();
+}
+
+/* ---------- Test data ---------- */
+function buildTestData(){
+  const p1 = newProject('AI Lead Generation Agent');
+  p1.description = 'Агент для поиска и квалификации лидов';
+  p1.status = 'В работе';
+  p1.currently = 'Тестируем источники лидов';
+  p1.nextStep = 'Проверить парсинг Telegram';
+  const stage1 = newNode('Источники данных'); stage1.status = 'В работе';
+  const t1 = newNode('RSS-источник MOEX'); t1.status = 'Завершено';
+  const t2 = newNode('Социальные источники'); t2.status = 'В работе';
+  const t2a = newNode('Проверить парсинг Telegram'); t2a.status = 'Не начато';
+  t2.children.push(t2a);
+  stage1.children.push(t1, t2);
+  const stage2 = newNode('Квалификация лидов'); stage2.status = 'Не начато';
+  p1.children.push(stage1, stage2);
+
+  const p2 = newProject('Trading Robots');
+  p2.description = 'Торговые роботы для MOEX/FORTS';
+  p2.status = 'В работе';
+  p2.currently = 'Разработка backtester';
+  p2.nextStep = 'Добавить следующую стратегию';
+  const s1 = newNode('Backtester'); s1.status = 'В работе';
+  s1.children.push(Object.assign(newNode('Загрузка исторических данных'), {status:'Завершено'}));
+  s1.children.push(Object.assign(newNode('Движок исполнения ордеров'), {status:'В работе'}));
+  const s2 = newNode('Стратегии'); s2.status = 'Не начато';
+  p2.children.push(s1, s2);
+
+  const p3 = newProject('Investment SaaS');
+  p3.description = 'Сервис для консервативных инвесторов';
+  p3.status = 'Пауза';
+  p3.currently = 'Аналитическое ядро готово частично';
+  p3.nextStep = 'Backend';
+  p3.children.push(Object.assign(newNode('Аналитическое ядро'), {status:'В работе'}));
+  p3.children.push(Object.assign(newNode('Backend'), {status:'Не начато'}));
+
+  return [p1, p2, p3];
+}
+
+/* ---------- Bootstrap ---------- */
+function init(){
+  const saved = Storage.load();
+  if(saved && Array.isArray(saved.projects) && saved.projects.length){
+    ProjectManager.set(saved.projects);
+  } else {
+    ProjectManager.set(buildTestData());
+    persist();
+  }
+  renderAll();
+
+  document.getElementById('btnNewProject').onclick = () => {
+    const p = newProject();
+    ProjectManager.add(p);
+    persist();
+    expandedProjects.add(p.id);
+    renderAll();
+    openEditor(p, p);
+  };
+
+  document.getElementById('btnExport').onclick = () => {
+    const data = { projects: ProjectManager.all() };
+    const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'project-map-export.json';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  document.getElementById('btnImport').onclick = () => document.getElementById('fileImport').click();
+  document.getElementById('fileImport').onchange = (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try{
+        const data = JSON.parse(reader.result);
+        if(!data || !Array.isArray(data.projects)) throw new Error('Неверный формат файла');
+        ProjectManager.set(data.projects);
+        persist();
+        expandedProjects.clear(); collapsedNodes.clear();
+        renderAll();
+      }catch(err){ alert('Не удалось импортировать файл: ' + err.message); }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  document.getElementById('btnClear').onclick = () => {
+    if(confirm('Удалить все данные без возможности восстановления?')){
+      Storage.clear();
+      ProjectManager.set(buildTestData());
+      persist();
+      expandedProjects.clear(); collapsedNodes.clear();
+      renderAll();
+    }
+  };
+}
+init();
+</script>
+</body>
+</html>
